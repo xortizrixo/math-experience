@@ -1,0 +1,65 @@
+{
+  "name": "GameProgress",
+  "type": "object",
+  "properties": {
+    "current_level": {
+      "type": "number",
+      "default": 1,
+      "description": "Current level of the player"
+    },
+    "total_stars": {
+      "type": "number",
+      "default": 0,
+      "description": "Total stars earned"
+    },
+    "levels_completed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number"
+          },
+          "stars": {
+            "type": "number"
+          },
+          "best_score": {
+            "type": "number"
+          },
+          "completed_at": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "List of completed levels with scores"
+    },
+    "badges": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of badge IDs earned"
+    },
+    "streak_days": {
+      "type": "number",
+      "default": 0,
+      "description": "Current streak of consecutive days played"
+    },
+    "last_played": {
+      "type": "string",
+      "format": "date",
+      "description": "Last date played"
+    },
+    "total_problems_solved": {
+      "type": "number",
+      "default": 0
+    },
+    "total_correct": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "current_level"
+  ]
+}
