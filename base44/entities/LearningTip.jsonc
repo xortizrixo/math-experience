@@ -1,0 +1,43 @@
+{
+  "name": "LearningTip",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Short title of the learning tip"
+    },
+    "description": {
+      "type": "string",
+      "description": "Full explanation of the learning tip"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "addition",
+        "subtraction",
+        "multiplication",
+        "division",
+        "general"
+      ],
+      "description": "Math topic this tip relates to"
+    },
+    "age_range": {
+      "type": "string",
+      "description": "Recommended age range, e.g. '6-8'"
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "description": "Difficulty level of the tip"
+    }
+  },
+  "required": [
+    "title",
+    "description",
+    "category"
+  ]
+}
