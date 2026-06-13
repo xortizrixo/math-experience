@@ -193,7 +193,7 @@ export default function GamePlay() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <div className="p-4 flex items-center justify-between">
+      <div className="px-4 pb-4 flex items-center justify-between" style={{ paddingTop: "calc(1rem + env(safe-area-inset-top))" }}>
         <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="rounded-full">
           <ArrowLeft className="w-5 h-5" />
         </Button>
