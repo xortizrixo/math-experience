@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
+import PageHeader from "@/components/PageHeader";
 
 export default function Guide() {
   return (
     <div className="min-h-screen bg-background">
+      <PageHeader title="Guide" />
       <div className="max-w-2xl mx-auto px-6 py-12">
         <h1 className="font-heading font-bold text-4xl mb-6 text-foreground">
           How to Play Math Quest — A Complete Guide for Kids and Parents

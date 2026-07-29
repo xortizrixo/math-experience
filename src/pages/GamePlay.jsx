@@ -63,12 +63,19 @@ export default function GamePlay() {
     }, 1200);
   };
 
-  const finishLevel = async (finalCorrect) => {
+  const finishLevel = (finalCorrect) => {
     setTimerRunning(false);
     const earnedStars = calculateStars(finalCorrect, level.problems);
     setStars(earnedStars);
 
-    // Save progress
+    // Transition to the result screen immediately (optimistic UI)
+    setPhase("result");
+
+    // Persist progress in the background without blocking the UI
+    saveProgress(finalCorrect, earnedStars);
+  };
+
+  const saveProgress = async (finalCorrect, earnedStars) => {
     const progressList = await base44.entities.GameProgress.list();
     let progress = progressList[0];
 
@@ -148,8 +155,6 @@ export default function GamePlay() {
       total_problems_solved: (progress.total_problems_solved || 0) + level.problems,
       total_correct: (progress.total_correct || 0) + finalCorrect,
     });
-
-    setPhase("result");
   };
 
   const handleTimeUp = () => {

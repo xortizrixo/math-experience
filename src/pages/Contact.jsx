@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import { Mail, Twitter, Github } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
 
 export default function Contact() {
   return (
     <div className="min-h-screen bg-background">
+      <PageHeader title="Contact" />
       <div className="max-w-2xl mx-auto px-6 py-12">
         <h1 className="font-heading font-bold text-4xl mb-4 text-foreground">Contact Us</h1>
         <p className="text-foreground/70 mb-10 leading-relaxed">

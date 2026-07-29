@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { LEVELS } from "@/lib/gameData";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Settings, Trash2 } from "lucide-react";
+import { Settings, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import LevelCard from "@/components/game/LevelCard";
 import StatsPanel from "@/components/game/StatsPanel";
 import BadgeGrid from "@/components/game/BadgeGrid";
@@ -15,15 +16,57 @@ import DeleteAccountDialog from "@/components/game/DeleteAccountDialog";
 
 export default function Home() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("levels");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = ["levels", "badges", "stats"].includes(searchParams.get("tab"))
+    ? searchParams.get("tab")
+    : "levels";
+  const setActiveTab = (tab) => setSearchParams({ tab });
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  const { data: progressList, isLoading } = useQuery({
+  const { data: progressList, isLoading, refetch } = useQuery({
     queryKey: ["gameProgress"],
     queryFn: () => base44.entities.GameProgress.list(),
     initialData: [],
   });
+
+  // Pull-to-refresh
+  const touchStartY = useRef(0);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const PULL_THRESHOLD = 70;
+  const MAX_PULL = 80;
+
+  const onTouchStart = (e) => {
+    if (refreshing) return;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const onTouchMove = (e) => {
+    if (refreshing) return;
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    if (scrollY <= 0) {
+      const diff = e.touches[0].clientY - touchStartY.current;
+      if (diff > 0) setPullDistance(Math.min(diff * 0.5, MAX_PULL));
+    } else {
+      setPullDistance(0);
+    }
+  };
+
+  const onTouchEnd = async () => {
+    if (pullDistance >= PULL_THRESHOLD && !refreshing) {
+      setRefreshing(true);
+      setPullDistance(MAX_PULL);
+      try {
+        await refetch();
+      } finally {
+        setRefreshing(false);
+        setPullDistance(0);
+      }
+    } else {
+      setPullDistance(0);
+    }
+  };
 
   const progress = progressList[0] || null;
   const currentLevel = progress?.current_level || 1;
@@ -37,7 +80,25 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      className="min-h-screen bg-background pb-20"
+    >
+      {/* Pull-to-refresh indicator */}
+      <div
+        className="flex items-center justify-center overflow-hidden transition-[height] duration-150 ease-out"
+        style={{ height: pullDistance }}
+      >
+        <Loader2
+          className={cn(
+            "w-6 h-6 text-primary",
+            (pullDistance > 0 || refreshing) && "animate-spin"
+          )}
+        />
+      </div>
+
       {/* Hero Header */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-accent/5 to-secondary/10" />
