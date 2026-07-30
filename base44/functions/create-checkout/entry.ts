@@ -71,25 +71,21 @@ Deno.serve(async (req: Request) => {
     // ===== APP-SPECIFIC =====
     // Resolve what is being bought AND its price SERVER-SIDE. NEVER trust a price sent by the
     // client — a buyer can tamper the request body and pay any amount. The client sends only a
-    // product identifier; look up the authoritative price here (a Product entity, a config map,
-    // etc.). For a subscription, set `subscriptionInfo` (frequency/interval/billingCycles).
+    // product identifier; the authoritative price lives in this server-side config map.
+    const PRODUCTS: Record<string, { name: string; price: string; currency: string }> = {
+      unlock_all: { name: "Unlock All Levels", price: "4.99", currency: "USD" },
+    };
     const productId = String(body.productId ?? "");
-    // Quantity is buyer-controlled, so VALIDATE it server-side. Check the RAW value is a positive
-    // integer BEFORE using it — do NOT Math.trunc first, or a fractional POST (e.g. 1.9) silently
-    // passes as 1 and charges a quantity the UI never allowed. For a plan / fixed-entitlement product,
-    // hard-code `1` and ignore the body; for a genuine multi-unit product, also enforce YOUR own max.
-    const quantity = Number(body.quantity ?? 1);
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      return new Response(JSON.stringify({ error: "Invalid quantity" }), { status: 400 });
+    const product = PRODUCTS[productId];
+    if (!product) {
+      return new Response(JSON.stringify({ error: "Unknown product" }), { status: 400 });
     }
-    // Example — replace with your real trusted product source:
-    //   const product = (await base44.asServiceRole.entities.Product.filter({ id: productId }))[0];
-    //   if (!product) return new Response(JSON.stringify({ error: "Unknown product" }), { status: 400 });
-    //   const productName = product.name; const price = String(product.price); const currency = product.currency ?? "USD";
-    const productName = "Purchase"; // TODO: from your trusted product source
-    const price = "0.00";           // TODO: authoritative per-unit price (major units), resolved server-side
-    const currency = "USD";
-    // For a SUBSCRIPTION set this to Wix's subscriptionInfo; leave null for a one-time payment.
+    // Fixed-entitlement product: always quantity 1, ignore any client-sent quantity.
+    const quantity = 1;
+    const productName = product.name;
+    const price = product.price;
+    const currency = product.currency;
+    // One-time purchase (no subscription).
     const subscriptionInfo = null;
     // Where Wix returns the buyer. Both MUST be real, PUBLICLY reachable routes in this app: the
     // returning buyer is often anonymous, so a missing or login-gated route strands a paid customer.

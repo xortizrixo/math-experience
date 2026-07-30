@@ -5,7 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { LEVELS } from "@/lib/gameData";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Settings, Trash2, Loader2 } from "lucide-react";
+import { Settings, Trash2, Loader2, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import LevelCard from "@/components/game/LevelCard";
@@ -29,6 +29,28 @@ export default function Home() {
     queryFn: () => base44.entities.GameProgress.list(),
     initialData: [],
   });
+
+  const { data: user } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: () => base44.auth.me(),
+    retry: false,
+  });
+  const unlockedAll = !!user?.unlocked_all;
+  const [purchasing, setPurchasing] = useState(false);
+
+  const handleUnlockAll = async () => {
+    if (purchasing) return;
+    setPurchasing(true);
+    try {
+      const res = await base44.functions.invoke("create-checkout", { productId: "unlock_all" });
+      const redirectUrl = res.data?.redirectUrl;
+      if (redirectUrl) window.location.href = redirectUrl;
+    } catch (err) {
+      console.error("Checkout failed", err);
+    } finally {
+      setPurchasing(false);
+    }
+  };
 
   // Pull-to-refresh
   const touchStartY = useRef(0);
@@ -156,6 +178,25 @@ export default function Home() {
 
       {/* Content */}
       <div className="max-w-2xl mx-auto px-6 pt-4">
+        {!unlockedAll && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 rounded-2xl p-4 bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/30 flex items-center gap-3"
+          >
+            <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+              <Crown className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-heading font-bold text-sm">Unlock All Levels</p>
+              <p className="text-xs text-muted-foreground">Get instant access to all 10 levels for $4.99.</p>
+            </div>
+            <Button onClick={handleUnlockAll} disabled={purchasing} size="sm" className="rounded-xl shrink-0">
+              {purchasing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Unlock"}
+            </Button>
+          </motion.div>
+        )}
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsContent value="levels">
             <div className="grid grid-cols-2 gap-3">
@@ -168,7 +209,7 @@ export default function Home() {
                 >
                   <LevelCard
                     level={level}
-                    isUnlocked={level.id <= currentLevel}
+                    isUnlocked={level.id <= currentLevel || unlockedAll}
                     completedData={getCompletedData(level.id)}
                     onClick={handleLevelClick}
                   />

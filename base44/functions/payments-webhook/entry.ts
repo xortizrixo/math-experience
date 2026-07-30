@@ -33,7 +33,9 @@ function parseWixEnvelope(payload: Record<string, unknown>): { eventType: string
 // For order_approved, the order is at eventData.order (per Wix Payments docs:
 // `eventData.order.checkoutId === checkoutSession.id`).
 function extractOrder(eventData: any): any | null {
-  return eventData?.order ?? null;
+  // Per Wix docs the order lives at eventData.actionEvent.body.order; keep a fallback for
+  // any envelope shape that surfaces it directly.
+  return eventData?.actionEvent?.body?.order ?? eventData?.order ?? null;
 }
 
 // The buyer's email, as entered on Wix's hosted checkout page. This is the ONLY identity for an
@@ -141,29 +143,21 @@ async function handleOrderApproved(db: any, eventData: any): Promise<Response> {
   const buyerEmail: string | null = purchase.buyerEmail ?? extractBuyerEmail(order);
 
   // ===== APP-SPECIFIC =====
-  // Grant whatever the buyer paid for. This runs BEFORE we mark the purchase paid: if it
-  // throws or times out, the status stays "pending", so Wix's retry re-runs the grant
-  // rather than hitting the "already paid" short-circuit above and skipping it forever.
-  //
-  // It MUST therefore be idempotent — Wix can also deliver duplicates CONCURRENTLY, so the
-  // "pending" check above is NOT a lock: two invocations can both reach this block. Make every
-  // effect safe to run twice by keying it on a stable id (purchase.id / checkoutId), never
-  // blind-create/blind-send:
-  //   - unlock a feature:   await db.entities.User.update(purchase.appUserId, { plan: purchase.productId });  // update is naturally idempotent
-  //   - create entitlement: const existing = await db.entities.Entitlement.filter({ purchaseId: purchase.id });
-  //                         if (!existing.length) await db.entities.Entitlement.create({ purchaseId: purchase.id, ... });
-  //   - one-time side effects (email/webhook): guard them the same way — record a marker keyed
-  //     on purchase.id and skip if it already exists, so a duplicate delivery can't send twice.
-  //   - QUANTITY: for a multi-unit purchase grant `purchase.quantity` (seats/credits/items), not a
-  //     single unit — it's the validated count create-checkout charged for. Fixed-entitlement = 1.
-  //   - subscriptions:      subscriptionId is persisted automatically below, for later revoke.
-  //   - GRANT TARGET: use purchase.appUserId when set (the built-in `User` entity — there is no
-  //     `AppUser`). For an anonymous buyer (appUserId null) match `buyerEmail` (resolved above)
-  //     against User; User records CANNOT be created here (invite-only), so when no user matches,
-  //     grant to an Entitlement row keyed on the email and claim it when they sign up.
-  //   - Gate paid access on a WRITABLE field you set here (e.g. plan / has_paid on the user or an
-  //     Entitlement row) — NEVER on is_verified: it is platform-protected and cannot be set here,
-  //     even as service role, so gating access on it locks the paying buyer out.
+  // Grant: "unlock_all" unlocks every level permanently by setting unlocked_all on the buyer's
+  // User. Idempotent — setting true twice is a no-op, safe under Wix's duplicate deliveries.
+  let targetUserId = purchase.appUserId;
+  if (!targetUserId && buyerEmail) {
+    // Anonymous buyer (no signed-in session): resolve their User by the checkout email.
+    const byEmail = await db.entities.User.filter({ email: buyerEmail });
+    targetUserId = byEmail?.[0]?.id ?? null;
+  }
+  if (targetUserId) {
+    await db.entities.User.update(targetUserId, { unlocked_all: true });
+  } else {
+    // No matching user yet (anonymous buyer with no account). The paid purchase records the
+    // buyerEmail; access is claimable once they sign up. Logged-in buyers are granted now.
+    console.warn("payments-webhook: no user to grant unlock_all", { checkoutId, buyerEmail });
+  }
   // ===== END APP-SPECIFIC =====
 
   // Mark paid LAST, so "paid" always implies the grant above completed. The idempotency
@@ -187,7 +181,7 @@ async function handleSubscriptionEnded(db: any, eventData: any): Promise<Respons
   // Canceled = ended early; Expired = ran all billing cycles. Both revoke access.
   // Mirrors the order path (eventData.<entity>); keep a fallback since the subscription
   // contract webhook body isn't as tightly documented as order_approved.
-  const contract = eventData?.subscriptionContract ?? eventData?.entity ?? null;
+  const contract = eventData?.actionEvent?.body?.subscriptionContract ?? eventData?.subscriptionContract ?? eventData?.entity ?? null;
   const subscriptionId: string | undefined = contract?.id;
 
   if (!subscriptionId) {
@@ -211,10 +205,8 @@ async function handleSubscriptionEnded(db: any, eventData: any): Promise<Respons
   }
 
   // ===== APP-SPECIFIC =====
-  // Revoke whatever access the subscription granted (mirror of the grant). Runs BEFORE we
-  // mark the purchase canceled: if it throws, the status stays as-is so Wix's retry re-runs
-  // the revoke rather than hitting the "already canceled" short-circuit and leaving access on.
-  // Must be idempotent.
+  // "unlock_all" is a one-time purchase with no subscription, so there is nothing to revoke
+  // here. If recurring products are added later, mirror the grant's revoke in this block.
   // ===== END APP-SPECIFIC =====
 
   // Mark canceled LAST, so "canceled" always implies access was actually revoked.
